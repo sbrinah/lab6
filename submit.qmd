@@ -1,28 +1,130 @@
 ---
-title: ""
-author: ""
+title: "lab6"
+author: "HsiHsuan Yang"
 format:
   html:
     embed-resources: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
 
 ```{r}
-1 + 1
+library(dplyr)
+library(R.utils)
+library(readr)
+library(forcats)
+samples <- read_csv("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/00_mtsamples/mtsamples.csv")
+samples <- samples %>%
+  select(description, medical_specialty, transcription)
+head(samples)
 ```
-
-You can add options to executable code like this
-
+Question 1: What specialties do we have?
 ```{r}
-#| echo: false
-2 * 2
+samples %>%
+  count(medical_specialty,sort = TRUE)
 ```
+Question 2: Tokenize, count, visualize
+```{r}
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+samples %>%
+  unnest_tokens(token,transcription) %>%
+  count(token) %>%
+  top_n(n=20,n)%>%
+  ggplot(aes(n, fct_reorder(token,n)))+
+  geom_col()
+```
+The above bar graph shows the top 20 frequency in the transcription column. The most appeared word is "the" followed by "and" and "was".
 
-The `echo: false` option disables the printing of code (only output is displayed).
+Question 3: redo visualization and bonus 
+```{r}
+library(forcats)
+samples %>%
+  unnest_tokens(word, transcription)%>%
+  anti_join(stop_words, by = c("word")) %>%
+  count(word, sort=T)%>%
+  top_n(20,n)%>%
+  ggplot(aes(n, fct_reorder(word, n)))+
+  geom_col()
+```
+```{r}
+samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words, by = c("word")) %>%
+  filter(!(word %in% as.character(seq(0,100)))) %>%
+  count(word, sort=T)%>%
+  top_n(20,n)%>%
+  ggplot(aes(n, fct_reorder(word, n)))+
+  geom_col()
+```
+Removing stop words give us a better idea of significant words that can lead to a better understanding of the main topics and themes in the text. The top 3 significant words in the transcription column are patient, left, history.
+
+Question 4: tokenize into bi-grams
+```{r}
+samples %>%
+  unnest_ngrams(ngram, transcription, n=2) %>%
+  count(ngram, sort=T)%>%
+  top_n(20,n)%>%
+  ggplot(aes(n, fct_reorder(ngram, n)))+
+  geom_col()
+```
+```{r}
+#tri-gram
+samples %>%
+  unnest_ngrams(ngram, transcription, n=3) %>%
+  count(ngram, sort=T)%>%
+  top_n(20,n)%>%
+  ggplot(aes(n, fct_reorder(ngram, n)))+
+  geom_col()
+```
+Question 5: pick a word before and after
+```{r}
+library(tidyr)
+pickbigrams<-samples %>%
+  unnest_ngrams(ngram, transcription, n=2) %>%
+  separate(ngram, into=c("word1", "word2"), sep = " ") %>%
+  select(word1, word2)
+pickbigrams %>%
+  filter(word1 == "history") %>%
+  count(word2, sort=T)
+pickbigrams %>%
+  filter(word2 == "history") %>%
+  count(word1, sort=T)
+pickbigrams %>%
+anti_join(stop_words, by = c("word1"="word")) %>%
+  anti_join(stop_words, by = c("word2"="word")) %>%
+  count(word1,word2, sort=T)
+```
+Question 6: which words are most used
+```{r}
+#The most used word in each of the specialties
+samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words, by = c("word" = "word")) %>%
+  group_by(medical_specialty) %>%
+  count(word) %>%
+top_n(1,n)
+```
+```{r}
+#most 5 used words in each of the specialties
+samples %>%
+  unnest_tokens(word, transcription) %>%
+  anti_join(stop_words, by = c("word" = "word")) %>%
+  group_by(medical_specialty) %>%
+  count(word) %>%
+  top_n(5,n)
+```
+Question 7: the least 20 used words 
+```{r}
+samples %>%
+  unnest_ngrams(ngram, transcription, n=1) %>%
+  count(ngram, sort=T)%>%
+  slice_tail(n=20)%>%
+  ggplot(aes(n, fct_reorder(ngram, n)))+
+  geom_col()
+```
+Interestingly, you're, we've, and wasn't were all used only once in the transcription column. But since the last 20 is shown in alphabetical order, there could be more than 20 that appeared only once in the column.   
+
+
+
